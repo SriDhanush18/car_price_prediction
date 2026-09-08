@@ -1,0 +1,83 @@
+name: Enterprise MLOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # 1. Quality & Data Validation Stage
+  data-validation-and-lint:
+    name: 1. Data Quality & Schema Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Core Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Data Layer Ingestion & 6-Point Quality Gate
+        run: |
+          python src/ingestion.py
+
+  # 2. Automated Test Suite & Multi-Model Benchmarking
+  test-and-model-benchmark:
+    name: 2. Automated Testing & MLflow Training
+    needs: data-validation-and-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest Test Suite
+        run: |
+          python -m pytest tests/ -v
+
+      - name: Execute Full Model Training & MLflow Registry
+        run: |
+          python src/train.py
+
+      - name: Run Statistical Drift Audit
+        run: |
+          python src/drift_detector.py
+
+  # 3. Docker Container Build Verification
+  docker-build-and-verify:
+    name: 3. Docker Build & Container Verification
+    needs: test-and-model-benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: car_price_mlops:latest
