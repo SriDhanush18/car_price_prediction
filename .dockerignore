@@ -1,0 +1,8 @@
+# Docker Ignore
+__pycache__
+*.pyc
+.pytest_cache
+.git
+.venv
+*.zip
+.DS_Store

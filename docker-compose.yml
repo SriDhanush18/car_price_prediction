@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # 1. Enterprise PostgreSQL Database Service
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: car_price_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mlops_user
+      POSTGRES_PASSWORD: mlops_password
+      POSTGRES_DB: car_price_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlops_user -d car_price_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. FastAPI High-Performance REST API Service
+  api_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: car_price_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://mlops_user:mlops_password@postgres_db:5432/car_price_db
+      - MLFLOW_TRACKING_URI=file:///app/mlruns
+    volumes:
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./mlruns:/app/mlruns
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 3. Interactive Streamlit Web UI Dashboard
+  dashboard_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: car_price_dashboard
+    command: streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - DATABASE_URL=postgresql://mlops_user:mlops_password@postgres_db:5432/car_price_db
+      - API_URL=http://api_service:8000
+    volumes:
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./mlruns:/app/mlruns
+    depends_on:
+      - api_service
+      - postgres_db
+    restart: unless-stopped
+
+  # 4. MLflow Tracking Server & Experiment Registry
+  mlflow_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: car_price_mlflow
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri file:///app/mlruns
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/app/mlruns
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

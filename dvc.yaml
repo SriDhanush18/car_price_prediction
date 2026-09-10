@@ -1,0 +1,40 @@
+stages:
+  data_ingest:
+    cmd: python src/ingestion.py
+    deps:
+      - src/ingestion.py
+      - data/raw/CarPrice_Assignment.csv
+    outs:
+      - artifacts/metrics/data_validation_report.json
+
+  eda_profiling:
+    cmd: python src/eda.py
+    deps:
+      - src/eda.py
+      - data/raw/CarPrice_Assignment.csv
+    outs:
+      - artifacts/metrics/eda_summary.json
+      - artifacts/plots/eda_correlation_heatmap.png
+      - artifacts/plots/eda_price_distribution.png
+      - artifacts/plots/eda_price_by_brand.png
+      - artifacts/plots/eda_engine_vs_price.png
+
+  model_training:
+    cmd: python src/train.py
+    deps:
+      - src/train.py
+      - src/preprocessor.py
+      - data/raw/CarPrice_Assignment.csv
+    outs:
+      - artifacts/models/best_model.joblib
+      - artifacts/metrics/model_comparison.json
+
+  model_evaluation:
+    cmd: python src/evaluate.py
+    deps:
+      - src/evaluate.py
+      - artifacts/models/best_model.joblib
+    outs:
+      - artifacts/plots/eval_model_comparison.png
+      - artifacts/plots/eval_residuals_and_predictions.png
+      - artifacts/plots/eval_feature_importance.png
